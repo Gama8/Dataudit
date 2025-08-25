@@ -4,6 +4,20 @@ import pandasql as ps
 from io import StringIO
 from PIL import Image
 
+
+# ---------- CSS para fondo blanco ----------
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: white;
+        color: black;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Colores institucionales
 color1 = "#2B4460"
 color2 = "#49C1C3"
@@ -63,3 +77,4 @@ if df is not None:
     st.sidebar.header("5. Enviar alerta por correo")
     if st.sidebar.button("Simular envío de alerta"):
         st.info("🔔 Se simuló el envío de un correo con los datos.")
+
