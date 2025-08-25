@@ -1,103 +1,65 @@
 import streamlit as st
 import pandas as pd
-import pandasql as psql
+import pandasql as ps
+from io import StringIO
 from PIL import Image
 
-# ---------- ESTILOS ----------
+# Colores institucionales
+color1 = "#2B4460"
+color2 = "#49C1C3"
+
+st.set_page_config(page_title="Dataudit", layout="wide")
+
 # Cargar logo
-logo = Image.open("logo.png")  # Asegúrate de que el archivo se llame exactamente así
+logo = Image.open("logo.png")
+st.image(logo, width=120)
 
-# Colores oficiales
-COLOR_PRIMARIO = "#2B4460"
-COLOR_SECUNDARIO = "#49C1C3"
-COLOR_FONDO = "#1E1E1E"
-COLOR_TEXTO = "#FFFFFF"
+# Título con estilos personalizados
+st.markdown(f"<h1 style='color:{color1};'>Data<span style='color:{color2};'>udit</span> - Plataforma de Auditoría BI</h1>", unsafe_allow_html=True)
 
-st.set_page_config(
-    page_title="Dataudit - Plataforma de Auditoría BI",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Subir archivo
+st.sidebar.header("1. Subir archivo")
+file = st.sidebar.file_uploader("Sube un archivo CSV o Excel", type=["csv", "xlsx"])
+df = None
 
-# ---------- CSS personalizado ----------
-st.markdown(
-    f"""
-    <style>
-    body {{
-        background-color: {COLOR_FONDO};
-        color: {COLOR_TEXTO};
-    }}
-    .stApp {{
-        background-color: {COLOR_FONDO};
-        color: {COLOR_TEXTO};
-        font-family: 'Arial', sans-serif;
-    }}
-    .css-1v0mbdj {{
-        color: {COLOR_TEXTO};
-    }}
-    .stButton>button {{
-        background-color: {COLOR_PRIMARIO};
-        color: white;
-        font-weight: bold;
-        border-radius: 5px;
-        margin-top: 10px;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ---------- INTERFAZ ----------
-col1, col2 = st.columns([1, 8])
-with col1:
-    st.image(logo, width=80)
-with col2:
-    st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}'>Dataudit <span style='color:{COLOR_SECUNDARIO}'>Corporate</span></h1>", unsafe_allow_html=True)
-
-# ---------- 1. SUBIR ARCHIVO ----------
-st.sidebar.title("1. Subir archivo")
-archivo = st.sidebar.file_uploader("Sube un archivo CSV o Excel", type=["csv", "xlsx"])
-
-if archivo:
-    st.success("Archivo cargado correctamente ✅")
-    
-    if archivo.name.endswith(".csv"):
-        df = pd.read_csv(archivo)
-    else:
-        df = pd.read_excel(archivo)
-
-    st.subheader("Vista previa de los datos")
-    st.dataframe(df)
-
-    # ---------- 2. AUDITORÍA POR DEFECTO ----------
-    st.sidebar.title("2. Auditoría por defecto")
-    if st.sidebar.button("Ejecutar auditoría de duplicados"):
-        duplicados = df[df.duplicated()]
-        st.subheader("Registros duplicados encontrados:")
-        st.dataframe(duplicados)
-
-    # ---------- 3. CONSULTA SQL ----------
-    st.sidebar.title("3. Consulta SQL manual")
-    st.markdown("Escribe una consulta SQL sobre la tabla `df` 🧠")
-    sql_query = st.text_area("Consulta SQL", "SELECT * FROM df LIMIT 10")
-
+if file:
     try:
-        resultado = psql.sqldf(sql_query, locals())
-        st.dataframe(resultado)
+        if file.name.endswith(".csv"):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+        st.success("Archivo cargado correctamente ✅")
+        st.subheader("Vista previa de los datos")
+        st.dataframe(df.head())
     except Exception as e:
-        st.error(f"Error en la consulta SQL: {e}")
+        st.error(f"Error al leer el archivo: {e}")
 
-    # ---------- 4. LENGUAJE NATURAL (dummy) ----------
-    st.sidebar.title("4. Consulta en lenguaje natural (dummy)")
-    input_natural = st.sidebar.text_input("Ejemplo: ¿Qué cliente vendió más?")
-    if input_natural:
-        st.info("🧠 Módulo dummy. Aquí se mostrará la conversión a SQL próximamente.")
-        st.code("SELECT cliente, SUM(ventas) as total_ventas FROM df GROUP BY cliente ORDER BY total_ventas DESC LIMIT 1")
+# Auditoría de duplicados
+if df is not None:
+    st.sidebar.header("2. Auditoría por defecto")
+    if st.sidebar.button("Ejecutar auditoría de duplicados"):
+        duplicates = df[df.duplicated()]
+        st.subheader("Registros duplicados")
+        st.dataframe(duplicates)
 
-    # ---------- 5. ENVÍO DE ALERTA (dummy) ----------
-    st.sidebar.title("5. Enviar alerta por correo")
+    # Consulta SQL manual
+    st.sidebar.header("3. Consulta SQL manual")
+    st.subheader("Escribe una consulta SQL sobre la tabla 🧮")
+    query = st.text_area("Consulta SQL", "SELECT * FROM df LIMIT 10")
+    if query:
+        try:
+            result = ps.sqldf(query, locals())
+            st.dataframe(result)
+        except Exception as e:
+            st.error(f"Error en la consulta SQL: {e}")
+
+    # Simular lenguaje natural
+    st.sidebar.header("4. Consulta en lenguaje natural (dummy)")
+    if st.sidebar.button("Simular: 'Muéstrame los clientes con más de 10000 ventas'"):
+        st.subheader("Resultado de la consulta simulada (dummy)")
+        st.dataframe(df[df["ventas"] > 10000])
+
+    # Simular envío de alerta
+    st.sidebar.header("5. Enviar alerta por correo")
     if st.sidebar.button("Simular envío de alerta"):
-        st.success("✅ Alerta enviada exitosamente a: auditor@datacorp.com (simulado)")
-else:
-    st.warning("Por favor, sube un archivo CSV o Excel para comenzar.")
+        st.info("🔔 Se simuló el envío de un correo con los datos.")
