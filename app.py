@@ -1,51 +1,65 @@
 import streamlit as st
 import pandas as pd
 import pandasql as ps
-from io import StringIO
 from PIL import Image
 
-
-# ---------- CSS para fondo blanco ----------
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: white;
-        color: black;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# Colores institucionales
-color1 = "#2B4460"
-color2 = "#49C1C3"
-
+# ----- CONFIGURACIÓN GENERAL -----
 st.set_page_config(page_title="Dataudit", layout="wide")
 
-# --- BLOQUE PARA CAMBIAR ESTILO ---
-st.markdown("""
+# ----- COLORES CORPORATIVOS -----
+color1 = "#2B4460"  # azul oscuro
+color2 = "#49C1C3"  # verde agua
+
+# ----- CSS PERSONALIZADO -----
+st.markdown(f"""
     <style>
-    .stAlert-success {
-        background-color: #e0f7fa !important;
-        color: #004d40 !important;
-    }
-    .stDataFrame {
-        background-color: #f9f9f9 !important;
-        color: #000000 !important;
-    }
+    /* Fondo claro general */
+    .stApp {{
+        background-color: white;
+        color: black;
+        font-family: 'Arial', sans-serif;
+    }}
+
+    /* Mensajes de éxito (st.success) */
+    .stAlert {{
+        background-color: #e6f4ff !important;
+        color: black !important;
+    }}
+
+    /* Encabezados de tabla */
+    thead tr th {{
+        background-color: #f2f2f2 !important;
+        color: black !important;
+    }}
+
+    /* Celdas del cuerpo de tabla */
+    tbody tr td {{
+        background-color: white !important;
+        color: black !important;
+    }}
+
+    /* Botones */
+    .stButton>button {{
+        background-color: {color1};
+        color: white;
+        font-weight: bold;
+        border-radius: 5px;
+        padding: 0.5em 1em;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-# Cargar logo
+# ----- LOGO -----
 logo = Image.open("logo.png")
 st.image(logo, width=120)
 
-# Título con estilos personalizados
-st.markdown(f"<h1 style='color:{color1};'>Data<span style='color:{color2};'>udit</span> - Plataforma de Auditoría BI</h1>", unsafe_allow_html=True)
+# ----- TÍTULO -----
+st.markdown(
+    f"<h1 style='color:{color1};'>Data<span style='color:{color2};'>udit</span> - Plataforma de Auditoría BI</h1>",
+    unsafe_allow_html=True
+)
 
-# Subir archivo
+# ----- CARGA DE ARCHIVO -----
 st.sidebar.header("1. Subir archivo")
 file = st.sidebar.file_uploader("Sube un archivo CSV o Excel", type=["csv", "xlsx"])
 df = None
@@ -58,11 +72,11 @@ if file:
             df = pd.read_excel(file)
         st.success("Archivo cargado correctamente ✅")
         st.subheader("Vista previa de los datos")
-        st.dataframe(df)
+        st.dataframe(df.head())
     except Exception as e:
         st.error(f"Error al leer el archivo: {e}")
 
-# Auditoría de duplicados
+# ----- AUDITORÍA BÁSICA -----
 if df is not None:
     st.sidebar.header("2. Auditoría por defecto")
     if st.sidebar.button("Ejecutar auditoría de duplicados"):
@@ -70,7 +84,7 @@ if df is not None:
         st.subheader("Registros duplicados")
         st.dataframe(duplicates)
 
-    # Consulta SQL manual
+    # Consulta SQL
     st.sidebar.header("3. Consulta SQL manual")
     st.subheader("Escribe una consulta SQL sobre la tabla 🧮")
     query = st.text_area("Consulta SQL", "SELECT * FROM df LIMIT 10")
@@ -81,17 +95,18 @@ if df is not None:
         except Exception as e:
             st.error(f"Error en la consulta SQL: {e}")
 
-    # Simular lenguaje natural
+    # Simular consulta en lenguaje natural
     st.sidebar.header("4. Consulta en lenguaje natural (dummy)")
     if st.sidebar.button("Simular: 'Muéstrame los clientes con más de 10000 ventas'"):
         st.subheader("Resultado de la consulta simulada (dummy)")
-        st.dataframe(df[df["ventas"] > 10000])
+        if "ventas" in df.columns:
+            st.dataframe(df[df["ventas"] > 10000])
+        else:
+            st.warning("No existe la columna 'ventas' en los datos cargados.")
 
-    # Simular envío de alerta
+    # Simular alerta por correo
     st.sidebar.header("5. Enviar alerta por correo")
     if st.sidebar.button("Simular envío de alerta"):
         st.info("🔔 Se simuló el envío de un correo con los datos.")
-
-
-
-
+else:
+    st.info("Carga un archivo para comenzar el análisis.")
