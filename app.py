@@ -10,44 +10,6 @@ st.set_page_config(page_title="Dataudit", layout="wide")
 color1 = "#2B4460"  # azul oscuro
 color2 = "#49C1C3"  # verde agua
 
-# ----- CSS PERSONALIZADO -----
-st.markdown(f"""
-    <style>
-    /* Fondo claro general */
-    .stApp {{
-        background-color: white;
-        color: black;
-        font-family: 'Arial', sans-serif;
-    }}
-
-    /* Mensajes de éxito (st.success) */
-    .stAlert {{
-        background-color: #e6f4ff !important;
-        color: black !important;
-    }}
-
-    /* Encabezados de tabla */
-    thead tr th {{
-        background-color: #f2f2f2 !important;
-        color: black !important;
-    }}
-
-    /* Celdas del cuerpo de tabla */
-    tbody tr td {{
-        background-color: white !important;
-        color: black !important;
-    }}
-
-    /* Botones */
-    .stButton>button {{
-        background-color: {color1};
-        color: white;
-        font-weight: bold;
-        border-radius: 5px;
-        padding: 0.5em 1em;
-    }}
-    </style>
-""", unsafe_allow_html=True)
 
 # ----- LOGO -----
 logo = Image.open("logo.png")
@@ -72,7 +34,7 @@ if file:
             df = pd.read_excel(file)
         st.success("Archivo cargado correctamente ✅")
         st.subheader("Vista previa de los datos")
-        st.dataframe(df.head())
+        st.dataframe(df)
     except Exception as e:
         st.error(f"Error al leer el archivo: {e}")
 
@@ -110,3 +72,4 @@ if df is not None:
         st.info("🔔 Se simuló el envío de un correo con los datos.")
 else:
     st.info("Carga un archivo para comenzar el análisis.")
+
