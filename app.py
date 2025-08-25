@@ -24,6 +24,20 @@ color2 = "#49C1C3"
 
 st.set_page_config(page_title="Dataudit", layout="wide")
 
+# --- BLOQUE PARA CAMBIAR ESTILO ---
+st.markdown("""
+    <style>
+    .stAlert-success {
+        background-color: #e0f7fa !important;
+        color: #004d40 !important;
+    }
+    .stDataFrame {
+        background-color: #f9f9f9 !important;
+        color: #000000 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Cargar logo
 logo = Image.open("logo.png")
 st.image(logo, width=120)
@@ -77,6 +91,7 @@ if df is not None:
     st.sidebar.header("5. Enviar alerta por correo")
     if st.sidebar.button("Simular envío de alerta"):
         st.info("🔔 Se simuló el envío de un correo con los datos.")
+
 
 
 
