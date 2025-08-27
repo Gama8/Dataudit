@@ -55,11 +55,13 @@ Convierte esta petición en SQL:
 Devuelve solo la consulta SQL sin explicaciones.
 """
     try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
-            max_tokens=150,
-            temperature=0
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Eres un experto en SQL."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200,
+            temperature=0.2
         )
         return response.choices[0].text.strip()
     except Exception as e:
@@ -107,3 +109,4 @@ if file and df is not None:
     st.sidebar.header("5. Enviar alerta por correo")
     if st.sidebar.button("Simular envío de alerta"):
         st.info("🔔 Se simuló el envío de un correo con los datos.")
+
