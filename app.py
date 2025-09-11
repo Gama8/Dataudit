@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import pandasql as ps
 from PIL import Image
-import openai
+from openai import OpenAI
 import os
 
 # Configurar la clave de OpenAI desde secretos o entorno local
@@ -39,6 +39,9 @@ if file:
         st.error(f"Error al leer el archivo: {e}")
 
 # --- Función para convertir lenguaje natural a SQL usando OpenAI ---
+# Configurar cliente OpenAI
+client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")))
+
 def convertir_lenguaje_a_sql(pregunta, df_sample):
     try:
         columnas = ", ".join([f"{col} ({dtype})" for col, dtype in df_sample.dtypes.items()])
@@ -49,7 +52,7 @@ Escribe una consulta SQL válida en dialecto SQLite que responda a la siguiente 
 
         prompt = f"{context}\n\nPregunta: {pregunta}\n\nSQL:"
 
-        respuesta = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "Eres un experto en SQL y vas a generar una consulta a partir de una pregunta."},
@@ -59,7 +62,7 @@ Escribe una consulta SQL válida en dialecto SQLite que responda a la siguiente 
             max_tokens=250
         )
 
-        sql_generado = respuesta["choices"][0]["message"]["content"].strip()
+        sql_generado = response.choices[0].message.content.strip()
         return sql_generado
 
     except Exception as e:
@@ -110,3 +113,4 @@ if df is not None:
         st.info("🔔 Se simuló el envío de un correo con los datos.")
 else:
     st.warning("Por favor, sube un archivo para comenzar.")
+
