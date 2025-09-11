@@ -1,27 +1,27 @@
 import streamlit as st
 import pandas as pd
 import pandasql as ps
-from io import StringIO
 from PIL import Image
 import openai
 import os
 
-# ---------- CONFIGURACIÓN ----------
-# Colores institucionales
-color1 = "#2B4460"  # Azul oscuro
-color2 = "#49C1C3"  # Verde claro
+# Configurar la clave de OpenAI desde secretos o entorno local
+openai.api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
 
-# Configurar la página
+# Colores institucionales
+color1 = "#2B4460"
+color2 = "#49C1C3"
+
 st.set_page_config(page_title="Dataudit", layout="wide")
 
 # Cargar logo
 logo = Image.open("logo.png")
 st.image(logo, width=120)
 
-# Título estilizado
+# Título con estilo
 st.markdown(f"<h1 style='color:{color1};'>Data<span style='color:{color2};'>udit</span> - Plataforma de Auditoría BI</h1>", unsafe_allow_html=True)
 
-# ---------- SUBIDA DE ARCHIVO ----------
+# Subir archivo
 st.sidebar.header("1. Subir archivo")
 file = st.sidebar.file_uploader("Sube un archivo CSV o Excel", type=["csv", "xlsx"])
 df = None
@@ -38,15 +38,44 @@ if file:
     except Exception as e:
         st.error(f"Error al leer el archivo: {e}")
 
-# ---------- AUDITORÍA POR DEFECTO ----------
+# --- Función para convertir lenguaje natural a SQL usando OpenAI ---
+def convertir_lenguaje_a_sql(pregunta, df_sample):
+    try:
+        columnas = ", ".join([f"{col} ({dtype})" for col, dtype in df_sample.dtypes.items()])
+        context = f"""La tabla se llama 'df' y tiene las siguientes columnas con sus tipos de datos:
+{columnas}
+
+Escribe una consulta SQL válida en dialecto SQLite que responda a la siguiente pregunta en español:"""
+
+        prompt = f"{context}\n\nPregunta: {pregunta}\n\nSQL:"
+
+        respuesta = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "Eres un experto en SQL y vas a generar una consulta a partir de una pregunta."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            max_tokens=250
+        )
+
+        sql_generado = respuesta["choices"][0]["message"]["content"].strip()
+        return sql_generado
+
+    except Exception as e:
+        return f"-- Error al generar SQL: {e}"
+
+# --- Funcionalidades solo si hay archivo cargado ---
 if df is not None:
+
+    # Auditoría de duplicados
     st.sidebar.header("2. Auditoría por defecto")
     if st.sidebar.button("Ejecutar auditoría de duplicados"):
         duplicates = df[df.duplicated()]
-        st.subheader("Registros duplicados encontrados")
+        st.subheader("Registros duplicados encontrados:")
         st.dataframe(duplicates)
 
-    # ---------- CONSULTA SQL MANUAL ----------
+    # Consulta SQL manual
     st.sidebar.header("3. Consulta SQL manual")
     st.subheader("Escribe una consulta SQL sobre la tabla 🧮")
     query = st.text_area("Consulta SQL", "SELECT * FROM df LIMIT 10")
@@ -57,42 +86,27 @@ if df is not None:
         except Exception as e:
             st.error(f"Error en la consulta SQL: {e}")
 
-    # ---------- CONVERSIÓN DE LENGUAJE NATURAL A SQL ----------
-    st.sidebar.header("4. Consulta en lenguaje natural (OpenAI GPT)")
-    natural_prompt = st.sidebar.text_input("Ejemplo: ¿Qué cliente vendió más?")
-    if natural_prompt:
-        try:
-            openai.api_key = os.getenv("OPENAI_API_KEY")  # Asegúrate de setear esto en el entorno
+    # Consulta en lenguaje natural (GPT)
+    st.sidebar.header("4. Consulta en lenguaje natural")
+    pregunta = st.sidebar.text_input("Pregunta en lenguaje natural", placeholder="¿Qué cliente vendió más?")
+    if pregunta:
+        st.info("🧠 Generando SQL con GPT...")
+        sql_convertido = convertir_lenguaje_a_sql(pregunta, df)
+        st.subheader("Consulta generada automáticamente")
+        st.code(sql_convertido)
 
-            prompt = f"""
-Convierte esta instrucción en una consulta SQL válida para una tabla llamada 'df'. Muestra solo el SQL.
-INSTRUCCIÓN: {natural_prompt}
-"""
-
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "Eres un experto en SQL."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=200,
-                temperature=0.2
-            )
-
-            sql_generated = response.choices[0].message.content.strip()
-            st.code(sql_generated, language='sql')
-
+        if "error" not in sql_convertido.lower():
             try:
-                result = ps.sqldf(sql_generated, locals())
-                st.subheader("Resultado")
-                st.dataframe(result)
+                resultado = ps.sqldf(sql_convertido, locals())
+                st.dataframe(resultado)
             except Exception as e:
-                st.error(f"Error al ejecutar el SQL generado: {e}")
+                st.error(f"Error al ejecutar la consulta generada: {e}")
+        else:
+            st.error(sql_convertido)
 
-        except Exception as e:
-            st.error(f"-- Error al generar SQL: {e}")
-
-    # ---------- ENVÍO DE ALERTA (DUMMY) ----------
+    # Envío de alerta simulado
     st.sidebar.header("5. Enviar alerta por correo")
     if st.sidebar.button("Simular envío de alerta"):
-        st.info("🔔 Se simuló el envío de un correo a: auditor@datacorp.com")
+        st.info("🔔 Se simuló el envío de un correo con los datos.")
+else:
+    st.warning("Por favor, sube un archivo para comenzar.")
