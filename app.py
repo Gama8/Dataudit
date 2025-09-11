@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import pandasql as ps
 from PIL import Image
-from openai import OpenAI
+import openai 
 import os
 
 # Configurar la clave de OpenAI desde secretos o entorno local
@@ -113,4 +113,5 @@ if df is not None:
         st.info("🔔 Se simuló el envío de un correo con los datos.")
 else:
     st.warning("Por favor, sube un archivo para comenzar.")
+
 
