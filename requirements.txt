@@ -1,7 +1,6 @@
 streamlit
 pandas
 pandasql
-pillow
 openai
-
-
+pillow
+python-dotenv
