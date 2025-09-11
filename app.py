@@ -46,26 +46,28 @@ client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_K
 
 def convertir_lenguaje_a_sql(pregunta, df_sample):
     try:
-prompt = (
-    f"Convierte la siguiente pregunta a una consulta SQL compatible con pandasql:\n"
-    f"Pregunta: \"{pregunta}\"\n"
-    f"Columnas disponibles: {', '.join(df.columns)}\n"
-    f"Usa nombres de columnas exactos. No inventes columnas."
-)
-
-        completion = client.chat.completions.create(
-            model="gpt-4",  # Cambia a "gpt-3.5-turbo" si prefieres
-            messages=[
-                {"role": "system", "content": "Eres un experto en convertir preguntas a SQL usando pandasql."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3
+        prompt = (
+            f"Convierte la siguiente pregunta a una consulta SQL compatible con pandasql:\n"
+            f"Pregunta: \"{pregunta}\"\n"
+            f"Columnas disponibles: {', '.join(df_sample.columns)}\n"
+            f"Usa nombres de columnas exactos. No inventes columnas."
         )
 
-        sql = completion.choices[0].message.content.strip()
-        return sql
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Eres un generador de SQL para pandasql."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            max_tokens=200
+        )
+
+        sql_generado = response.choices[0].message.content.strip()
+        return sql_generado
     except Exception as e:
-        return f"-- Error al generar SQL: \n\n{e}"
+        return f"-- Error al generar SQL: {e}"
+
 
 # --- Funcionalidades cuando hay archivo cargado ---
 if file and df is not None:
@@ -114,3 +116,4 @@ if file and df is not None:
         st.info("🔔 Se simuló el envío de un correo con los datos.")
 else:
     st.warning("📁 Por favor, sube un archivo CSV o Excel para comenzar.")
+
