@@ -1,16 +1,37 @@
 """Estado de la sesión de Streamlit: conjuntos de datos cargados, motor SQL y datos del auditor."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import streamlit as st
 
 from core import loader
+from core.almacen import Almacen
 from core.datasets import ConjuntoDatos
 from core.engine import MotorSQL
 
 RAIZ = Path(__file__).resolve().parents[1]
 DEMO = RAIZ / "datos_demo"
+
+
+def configuracion(clave: str, defecto: str | None = None) -> str | None:
+    """Lee primero .streamlit/secrets.toml y luego las variables de entorno."""
+    try:
+        valor = st.secrets.get(clave)
+    except Exception:  # no existe secrets.toml
+        valor = None
+    return valor or os.getenv(clave) or defecto
+
+
+@st.cache_resource
+def _almacen(ruta: str) -> Almacen:
+    return Almacen(ruta)
+
+
+def almacen() -> Almacen:
+    """Tableros y hallazgos persistentes (SQLite; ruta configurable con DATAUDIT_DB)."""
+    return _almacen(configuracion("DATAUDIT_DB", str(RAIZ / "datos_app" / "dataudit.db")))
 
 
 def inicializar() -> None:

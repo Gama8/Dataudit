@@ -1,9 +1,11 @@
 import pandas as pd
 import streamlit as st
 
+from core.almacen import SEVERIDADES
 from core.mapping import CAMPOS
 from core.pruebas import CATEGORIAS, REGISTRO, Parametro, Prueba, por_categoria
 from ui import estado
+from ui.artefactos import guardar_hallazgo
 from ui.componentes import exportar_papel, metricas, tabla
 
 conjunto = estado.requiere_datos()
@@ -138,3 +140,19 @@ encabezado = {"Objetivo": prueba.objetivo, "Referencia normativa": prueba.nia, *
                  for p in prueba.parametros}}
 hojas = {"Excepciones": resultado.hallazgos, **resultado.tablas}
 exportar_papel(prueba.nombre, encabezado, hojas, resultado.resumen, f"{conjunto.nombre}_{clave}")
+
+if resultado.hay_excepciones:
+    with st.popover("Registrar como hallazgo", icon=":material/bookmark_add:"):
+        with st.form(f"hallazgo_{conjunto.nombre}_{clave}", border=False):
+            titulo = st.text_input("Título", value=f"{prueba.nombre} en {conjunto.nombre}")
+            severidad = st.selectbox("Severidad", SEVERIDADES, index=1)
+            condicion = st.text_area("Condición", value=resultado.resumen)
+            criterio = st.text_area("Criterio", placeholder="Política, norma o control que debería cumplirse")
+            recomendacion = st.text_area("Recomendación")
+            valor = st.number_input("Valor afectado ($)", min_value=0.0, step=100_000.0, format="%.0f")
+            if st.form_submit_button("Guardar en el registro", type="primary"):
+                codigo = guardar_hallazgo(
+                    {"titulo": titulo, "severidad": severidad, "condicion": condicion, "criterio": criterio,
+                     "recomendacion": recomendacion, "valor_afectado": valor or None, "conjunto": conjunto.nombre,
+                     "prueba": clave}, resultado.hallazgos, "Prueba")
+                st.toast(f"Hallazgo {codigo} registrado", icon=":material/check:")

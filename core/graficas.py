@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 SERIE_1 = "#2a78d6"  # azul
 SERIE_2 = "#eb6834"  # naranja
 SERIE_3 = "#1baf7a"  # aguamarina
+# Orden fijo validado (nunca se recicla): a partir de la novena serie se agrupa en "Otros".
+CATEGORICA = (SERIE_1, SERIE_2, SERIE_3, "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948")
 POLO_NEGATIVO = "#2a78d6"  # divergente: disminuciones
 POLO_POSITIVO = "#e34948"  # divergente: aumentos
 TINTA_TENUE = "#898781"

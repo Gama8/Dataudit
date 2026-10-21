@@ -10,14 +10,16 @@ st.markdown("#### Auditoría de datos y BI para pymes, sin escribir código")
 st.write("Carga los reportes de tu cliente, ejecuta pruebas de auditoría precargadas, selecciona muestras "
          "estadísticas y exporta papeles de trabajo con trazabilidad completa.")
 
-pasos = st.columns(3)
+pasos = st.columns(4)
 for columna, (numero, titulo, texto, destino, icono) in zip(pasos, (
     (1, "Carga y mapea", "Sube un Excel o CSV de tu ERP e indica qué columna es la fecha, el valor, el NIT…",
      "vistas/datos.py", ":material/upload_file:"),
-    (2, "Ejecuta pruebas", "Benford, duplicados, fraccionamiento, festivos, antigüedad de saldos y más.",
+    (2, "Pregunta al asistente", "Escribe en español: consulta, grafica, ejecuta pruebas y propone hallazgos.",
+     "vistas/asistente.py", ":material/auto_awesome:"),
+    (3, "Ejecuta pruebas y muestrea", "Benford, duplicados, fraccionamiento, festivos, MUS y más, con su NIA.",
      "vistas/pruebas.py", ":material/fact_check:"),
-    (3, "Muestrea y documenta", "Muestreo aleatorio, sistemático, MUS o estratificado con semilla reproducible.",
-     "vistas/muestreo.py", ":material/filter_alt:"),
+    (4, "Documenta y monitorea", "Registra hallazgos, exporta papeles de trabajo y arma tableros que se recalculan.",
+     "vistas/hallazgos.py", ":material/bookmark:"),
 )):
     with columna.container(border=True, height="stretch"):
         st.markdown(f"**{numero}. {titulo}**")
@@ -39,7 +41,7 @@ with derecha:
     if st.button("Cargar datos de demostración", icon=":material/science:", type="primary"):
         cargados = estado.cargar_demo()
         st.toast(f"Cargados: {', '.join(cargados)}" if cargados else "Los datos de demostración ya estaban cargados.")
-        st.switch_page("vistas/pruebas.py")
+        st.switch_page("vistas/asistente.py")
     if estado.conjuntos():
         st.success(f"{len(estado.conjuntos())} conjunto(s) de datos cargado(s). Activo: "
                    f"**{st.session_state['activo']}**", icon=":material/check_circle:")
