@@ -396,6 +396,27 @@ def ejecutar_herramienta(nombre: str, entrada: Any, contexto: Contexto) -> tuple
     return _IMPLEMENTACIONES[nombre](entrada, contexto)
 
 
+def ejecutar_llamadas(llamadas: list[tuple[str, Any]], contexto: Contexto):
+    """Ejecuta las llamadas (nombre, entrada) de un paso, emitiendo eventos para la interfaz.
+
+    Generador común a todos los proveedores: produce Evento y retorna [(texto, es_error), ...]
+    en el mismo orden de las llamadas (úsalo con `resultados = yield from ejecutar_llamadas(...)`).
+    """
+    resultados = []
+    for nombre, entrada in llamadas:
+        yield Evento("herramienta", nombre, detalle=entrada if isinstance(entrada, dict) else {})
+        try:
+            texto, artefacto = ejecutar_herramienta(nombre, entrada, contexto)
+        except ErrorHerramienta as error:
+            yield Evento("error_herramienta", str(error), detalle={"herramienta": nombre})
+            resultados.append((str(error), True))
+            continue
+        if artefacto is not None:
+            yield Evento("artefacto", artefacto=artefacto)
+        resultados.append((texto, False))
+    return resultados
+
+
 # --- Bucle del agente --------------------------------------------------------------------------------
 
 def _para_historial(bloques: list) -> list:
@@ -406,6 +427,10 @@ def _para_historial(bloques: list) -> list:
     corte = max(i for i, t in enumerate(tipos) if t == "fallback")
     internos = {"thinking", "redacted_thinking", "tool_use", "server_tool_use"}
     return [b for i, b in enumerate(bloques) if i >= corte or b.type not in internos]
+
+
+def mensaje_usuario(texto: str) -> dict:
+    return {"role": "user", "content": texto}
 
 
 def responder(cliente, mensajes: list, contexto: Contexto, modelo: str = MODELO_POR_DEFECTO,
@@ -461,24 +486,13 @@ def responder(cliente, mensajes: list, contexto: Contexto, modelo: str = MODELO_
             yield Evento("fin", detalle=uso)
             return
 
-        resultados = []
-        for bloque in usos:
-            if respuesta.stop_reason == "max_tokens":
-                # La entrada quedó cortada: no se ejecuta, pero se responde para mantener el historial válido.
-                resultados.append({"type": "tool_result", "tool_use_id": bloque.id, "is_error": True,
-                                   "content": "La entrada de la herramienta quedó incompleta; inténtalo de nuevo."})
-                continue
-            yield Evento("herramienta", bloque.name, detalle=bloque.input if isinstance(bloque.input, dict) else {})
-            try:
-                texto, artefacto = ejecutar_herramienta(bloque.name, bloque.input, contexto)
-            except ErrorHerramienta as error:
-                yield Evento("error_herramienta", str(error), detalle={"herramienta": bloque.name})
-                resultados.append({"type": "tool_result", "tool_use_id": bloque.id, "is_error": True,
-                                   "content": str(error)})
-                continue
-            if artefacto is not None:
-                yield Evento("artefacto", artefacto=artefacto)
-            resultados.append({"type": "tool_result", "tool_use_id": bloque.id, "content": texto})
-        mensajes.append({"role": "user", "content": resultados})
+        if respuesta.stop_reason == "max_tokens":
+            # La entrada quedó cortada: no se ejecuta, pero se responde para mantener el historial válido.
+            salidas = [("La entrada de la herramienta quedó incompleta; inténtalo de nuevo.", True)] * len(usos)
+        else:
+            salidas = yield from ejecutar_llamadas([(b.name, b.input) for b in usos], contexto)
+        mensajes.append({"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": b.id, "content": texto, **({"is_error": True} if error else {})}
+            for b, (texto, error) in zip(usos, salidas)]})
     yield Evento("error", f"Se alcanzó el máximo de {MAX_PASOS} pasos en esta pregunta. Pide que continúe "
                           "o divide la pregunta.", detalle=uso)
