@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 from streamlit.testing.v1 import AppTest
 
 from core import asistente_gemini
@@ -47,7 +47,14 @@ class GeminiFalso:
 
     def _stream(self, *, model, contents, config):
         self.solicitudes.append({"model": model, "contents": list(contents), "config": config})
-        return iter(self.guion.pop(0))
+        siguiente = self.guion.pop(0)
+        if isinstance(siguiente, Exception):
+            raise siguiente
+        return iter(siguiente)
+
+
+def saturado():
+    return errors.ServerError(503, {"error": {"code": 503, "message": "high demand", "status": "UNAVAILABLE"}})
 
 
 @pytest.fixture
@@ -94,7 +101,8 @@ def test_flujo_con_herramientas(contexto):
     respuesta = contenidos[2].parts[0].function_response
     assert respuesta.name == "consultar_sql" and respuesta.id == "c1" and "resultado" in respuesta.response
     assert len(contenidos[4].parts) == 2  # las dos llamadas paralelas se responden juntas
-    assert eventos[-1].detalle == {"entrada": 1800, "cache": 1200, "salida": 240, "pasos": 3}
+    assert eventos[-1].detalle == {"entrada": 1800, "cache": 1200, "salida": 240, "pasos": 3,
+                                   "modelo": "gemini-3.8-flash"}
     assert cliente.solicitudes[0]["model"] == "gemini-3.8-flash"
 
 
@@ -111,6 +119,40 @@ def test_numeros_como_decimales_y_errores(contexto):
     assert "resultado" in respuestas[0].function_response.response
     assert "error" in respuestas[1].function_response.response
     assert len(contexto.artefactos["M1"].datos.muestra) == 10
+
+
+def test_modelo_saturado_pasa_al_siguiente(contexto):
+    cliente = GeminiFalso([saturado(), saturado(), paso(llamada("ver_esquema", {})), paso(texto("Listo."))])
+    contenidos, eventos = turno(cliente, contexto)
+    avisos = [e.texto for e in eventos if e.tipo == "aviso"]
+    assert len(avisos) == 2 and "gemini-3.5-flash-lite" in avisos[-1]
+    # El modelo de respaldo se mantiene para el resto del turno y se informa para los siguientes.
+    assert [s["model"] for s in cliente.solicitudes] == ["gemini-3.8-flash", "gemini-3.6-flash",
+                                                         "gemini-3.5-flash-lite", "gemini-3.5-flash-lite"]
+    assert eventos[-1].tipo == "fin" and eventos[-1].detalle["modelo"] == "gemini-3.5-flash-lite"
+
+
+def test_no_cambia_de_modelo_a_mitad_de_turno(contexto):
+    # Tras una llamada a herramienta, las firmas del turno son del primer modelo: no se mezclan modelos.
+    cliente = GeminiFalso([paso(llamada("ver_esquema", {})), saturado()])
+    with pytest.raises(errors.ServerError):
+        turno(cliente, contexto)
+    assert [s["model"] for s in cliente.solicitudes] == ["gemini-3.8-flash", "gemini-3.8-flash"]
+
+
+def test_campos_por_nombre_de_columna(contexto):
+    # Gemini envió en la prueba real nombres de columna en lugar de claves de campo.
+    cliente = GeminiFalso([
+        paso(llamada("ejecutar_prueba", {"clave": "duplicados", "conjunto": "pagos",
+                                         "parametros_json": '{"campos": ["NIT", "Valor", "Fecha"]}'})),
+        paso(llamada("ejecutar_prueba", {"clave": "duplicados", "conjunto": "pagos",
+                                         "parametros_json": '{"campos": ["Columna inexistente"]}'})),
+        paso(texto("Listo.")),
+    ])
+    contenidos, eventos = turno(cliente, contexto)
+    assert contexto.artefactos["P1"].spec["parametros"]["campos"] == ["nit", "monto", "fecha"]
+    error = contenidos[4].parts[0].function_response.response["error"]
+    assert "no es un campo mapeado" in error and "monto" in error
 
 
 def test_bloqueo_de_seguridad(contexto):

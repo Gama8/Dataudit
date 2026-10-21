@@ -19,7 +19,7 @@ from core import muestreo, visual
 from core.almacen import SEVERIDADES
 from core.datasets import ConjuntoDatos
 from core.engine import ConsultaInvalida, MotorSQL
-from core.mapping import CAMPOS
+from core.mapping import CAMPOS, normalizar
 from core.pruebas import REGISTRO
 
 MODELO_POR_DEFECTO = "claude-opus-5-5"
@@ -274,7 +274,22 @@ def crear_grafica(entrada: dict, contexto: Contexto) -> tuple[str, Artefacto | N
     return f"Gráfica {artefacto.id} mostrada al auditor.", artefacto
 
 
-def _parametros(prueba, texto_json: str) -> dict:
+def _campos(valor, conjunto: ConjuntoDatos) -> list[str]:
+    """Acepta claves (`monto`), nombres de columna (`Valor`) o etiquetas (`Valor / monto`) y devuelve claves."""
+    valores = [valor] if isinstance(valor, str) else list(valor or [])
+    por_nombre = {normalizar(col): clave for clave, col in conjunto.mapeo.items() if col}
+    por_nombre.update({normalizar(CAMPOS[c].etiqueta): c for c in CAMPOS})
+    claves = []
+    for v in valores:
+        clave = v if v in CAMPOS else por_nombre.get(normalizar(v))
+        if clave is None or clave not in conjunto.campos_mapeados:
+            raise ValueError(f"«{v}» no es un campo mapeado; usa claves de esta lista: "
+                             f"{', '.join(conjunto.campos_mapeados)}")
+        claves.append(clave)
+    return claves
+
+
+def _parametros(prueba, texto_json: str, conjunto: ConjuntoDatos) -> dict:
     try:
         recibidos = json.loads(texto_json or "{}")
     except json.JSONDecodeError as error:
@@ -301,7 +316,7 @@ def _parametros(prueba, texto_json: str) -> dict:
             elif p.tipo == "opcion" and valor not in p.opciones:
                 raise ValueError(f"opciones válidas: {list(p.opciones)}")
             elif p.tipo == "campos":
-                valor = [c for c in valor if c in CAMPOS]
+                valor = _campos(valor, conjunto)
         except (TypeError, ValueError) as error:
             raise ErrorHerramienta(f"Valor inválido para «{clave}»: {error}") from error
         valores[clave] = valor
@@ -318,7 +333,7 @@ def ejecutar_prueba(entrada: dict, contexto: Contexto) -> tuple[str, Artefacto |
     if faltan:
         raise ErrorHerramienta(f"El conjunto «{conjunto.nombre}» no tiene mapeados: "
                                f"{', '.join(CAMPOS[c].etiqueta for c in faltan)}. Pide al auditor que los mapee.")
-    parametros = _parametros(prueba, entrada.get("parametros_json", "{}"))
+    parametros = _parametros(prueba, entrada.get("parametros_json", "{}"), conjunto)
     try:
         resultado = prueba.ejecutar(conjunto.std, parametros)
     except ValueError as error:

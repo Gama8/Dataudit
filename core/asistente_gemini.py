@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from typing import Iterator
 
-from google.genai import types
+from google.genai import errors, types
 
 from core.asistente import HERRAMIENTAS, MAX_PASOS, SISTEMA, Contexto, Evento, ejecutar_llamadas
 
 MODELO_POR_DEFECTO = "gemini-3.8-flash"
+# Modelos con nivel gratuito, en orden de preferencia. Si uno está saturado (503) o sin cuota (429),
+# el asistente continúa con el siguiente; cada modelo tiene su propia cuota gratuita.
+MODELOS_RESPALDO = ("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
+_CODIGOS_RESPALDO = {429, 503}
 _NIVELES = {"low": types.ThinkingLevel.LOW, "medium": types.ThinkingLevel.MEDIUM, "high": types.ThinkingLevel.HIGH,
             "xhigh": types.ThinkingLevel.HIGH, "max": types.ThinkingLevel.HIGH}
 _BLOQUEOS = {types.FinishReason.SAFETY, types.FinishReason.PROHIBITED_CONTENT, types.FinishReason.BLOCKLIST,
@@ -52,24 +56,40 @@ def responder(cliente, contenidos: list, contexto: Contexto, modelo: str = MODEL
     Las partes del modelo se guardan tal como llegan (con sus firmas de pensamiento) y el
     historial solo crece, como exige Gemini para continuar un razonamiento con herramientas.
     """
-    uso = {"entrada": 0, "salida": 0, "cache": 0, "pasos": 0}
+    modelos = [modelo] + [m for m in MODELOS_RESPALDO if m != modelo]
+    actual = 0
+    uso = {"entrada": 0, "salida": 0, "cache": 0, "pasos": 0, "modelo": modelo}
     config = configuracion(esfuerzo)
+    inicio_turno = len(contenidos)
     for _ in range(MAX_PASOS):
         reintentos = 0
         while True:
             partes, motivo, bloqueo, metadatos = [], None, None, None
-            for fragmento in cliente.models.generate_content_stream(model=modelo, contents=contenidos, config=config):
-                metadatos = fragmento.usage_metadata or metadatos
-                if fragmento.prompt_feedback and fragmento.prompt_feedback.block_reason:
-                    bloqueo = fragmento.prompt_feedback.block_reason
-                if not fragmento.candidates:
+            try:
+                for fragmento in cliente.models.generate_content_stream(model=modelos[actual], contents=contenidos,
+                                                                        config=config):
+                    metadatos = fragmento.usage_metadata or metadatos
+                    if fragmento.prompt_feedback and fragmento.prompt_feedback.block_reason:
+                        bloqueo = fragmento.prompt_feedback.block_reason
+                    if not fragmento.candidates:
+                        continue
+                    candidato = fragmento.candidates[0]
+                    motivo = candidato.finish_reason or motivo
+                    for parte in (candidato.content.parts or []) if candidato.content else []:
+                        partes.append(parte)
+                        if parte.text:
+                            yield Evento("razonamiento" if parte.thought else "texto", parte.text)
+            except errors.APIError as error:
+                # Modelo saturado o sin cuota gratuita: se pasa al siguiente, pero solo al inicio de la respuesta.
+                # Las firmas de pensamiento del turno en curso son de cada modelo y no se pueden mezclar.
+                al_inicio = not partes and len(contenidos) == inicio_turno
+                if error.code in _CODIGOS_RESPALDO and al_inicio and actual + 1 < len(modelos):
+                    actual += 1
+                    uso["modelo"] = modelos[actual]
+                    causa = "está saturado" if error.code == 503 else "agotó su cuota gratuita"
+                    yield Evento("aviso", f"{modelos[actual - 1]} {causa}; continúo con {modelos[actual]}.")
                     continue
-                candidato = fragmento.candidates[0]
-                motivo = candidato.finish_reason or motivo
-                for parte in (candidato.content.parts or []) if candidato.content else []:
-                    partes.append(parte)
-                    if parte.text:
-                        yield Evento("razonamiento" if parte.thought else "texto", parte.text)
+                raise
             if motivo == types.FinishReason.MALFORMED_FUNCTION_CALL and reintentos < MAX_REINTENTOS:
                 reintentos += 1
                 yield Evento("reinicio")

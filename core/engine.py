@@ -77,7 +77,7 @@ class MotorSQL:
         temporizador = threading.Timer(tiempo_maximo, self.con.interrupt)
         temporizador.start()
         try:
-            lector = self.con.execute(consulta).to_arrow_reader(min(limite + 1, 100_000))
+            lector = self.con.sql(consulta).to_arrow_reader(min(limite + 1, 100_000))
             lotes, filas = [], 0
             for lote in lector:
                 lotes.append(lote)

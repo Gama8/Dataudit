@@ -44,15 +44,17 @@ def cliente(nombre: str, clave: str):
     return anthropic.Anthropic(api_key=clave) if nombre == "anthropic" else genai.Client(api_key=clave)
 
 
-modelo = estado.configuracion("DATAUDIT_MODELO", modulo.MODELO_POR_DEFECTO)
 esfuerzo = estado.configuracion("DATAUDIT_ESFUERZO", asistente.ESFUERZO_POR_DEFECTO)
 if esfuerzo not in asistente.ESFUERZOS:
     esfuerzo = asistente.ESFUERZO_POR_DEFECTO
+CLAVES_CHAT = ("chat_mensajes", "chat_vista", "chat_artefactos", "chat_uso", "chat_modelo")
 # El historial tiene el formato de cada proveedor: si cambia el proveedor, empieza una conversación nueva.
 if st.session_state.get("chat_proveedor") != elegido:
-    for clave in ("chat_mensajes", "chat_vista", "chat_artefactos", "chat_uso"):
+    for clave in CLAVES_CHAT:
         st.session_state.pop(clave, None)
     st.session_state["chat_proveedor"] = elegido
+# Si en esta conversación ya se pasó a un modelo de respaldo, se sigue con él.
+modelo = st.session_state.get("chat_modelo") or estado.configuracion("DATAUDIT_MODELO", modulo.MODELO_POR_DEFECTO)
 st.session_state.setdefault("chat_mensajes", [])  # historial exacto que se envía a la API
 st.session_state.setdefault("chat_vista", [])  # lo que se dibuja en pantalla
 st.session_state.setdefault("chat_artefactos", {})
@@ -69,8 +71,8 @@ if uso_total["pasos"]:
                     + (f" · ≈ US$ {costo:.2f} en esta conversación" if costo is not None else ""))
 barra[0].caption(resumen_uso)
 if barra[1].button("Nueva conversación", icon=":material/add_comment:", disabled=not st.session_state["chat_vista"]):
-    for clave in ("chat_mensajes", "chat_vista", "chat_artefactos", "chat_uso"):
-        st.session_state.pop(clave)
+    for clave in CLAVES_CHAT:
+        st.session_state.pop(clave, None)
     st.rerun()
 
 
@@ -146,6 +148,8 @@ class Transmision:
                 parte = {"tipo": "paso", "texto": describir_paso(evento.texto, evento.detalle)}
             elif evento.tipo == "error_herramienta":
                 parte = {"tipo": "paso", "icono": "undo", "texto": f"Corrigiendo: {evento.texto}"}
+            elif evento.tipo == "aviso":
+                parte = {"tipo": "paso", "icono": "swap_horiz", "texto": evento.texto}
             elif evento.tipo == "artefacto":
                 parte = {"tipo": "artefacto", "id": evento.artefacto.id}
             elif evento.tipo == "error":
@@ -202,6 +206,8 @@ if pregunta:
                 if evento.tipo in ("fin", "error") and evento.detalle:
                     for clave in uso_total:
                         uso_total[clave] += evento.detalle.get(clave, 0)
+                    if evento.detalle.get("modelo", modelo) != modelo:
+                        st.session_state["chat_modelo"] = evento.detalle["modelo"]
         except anthropic.AuthenticationError:
             transmision.recibir(asistente.Evento("error", "La API key de Anthropic no es válida. Revísala en "
                                                           "la configuración."))
