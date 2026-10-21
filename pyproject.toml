@@ -1,0 +1,9 @@
+[project]
+name = "dataudit"
+version = "0.2.0"
+description = "BI y auditoría de datos para pymes colombianas"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
